@@ -1,0 +1,63 @@
+{
+
+"document": {
+
+  "cluster" : "documentManagementSystem",
+  "ui" : false,
+  "api" : true,
+  "fields" : {
+    "id": {
+      "name": "id",
+      "required": "true",
+      "type": "String"
+    },
+    "name": {
+      "name": "name",
+      "required": "true",
+      "type": "String"
+    },
+    "filePath": {
+      "name": "filePath",
+      "required": "true",
+      "type": "String"
+    },
+    "uploadedBy": {
+      "name": "uploadedBy",
+      "required": "true",
+      "type": "String"
+    },
+    "appId": {
+      "name": "appId",
+      "required": "true",
+      "type": "String"
+    },
+    "tags": {
+      "name": "tags",
+      "required": "false",
+      "type": "String"
+    },
+    "description": {
+      "name": "description",
+      "required": "false",
+      "type": "String"
+    },
+    "isEncrypted": {
+      "name": "isEncrypted",
+      "required": "true",
+      "type": "String"
+    },
+    "fileSize": {
+      "name": "fileSize",
+      "required": "true",
+      "type": "String"
+    },
+    "contentType": {
+      "name": "contentType",
+      "required": "true",
+      "type": "String"
+    }
+  }
+ }
+
+}
+

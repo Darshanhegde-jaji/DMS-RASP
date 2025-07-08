@@ -119,17 +119,31 @@ public class DocumentController  {
 //    }
 
     @GetMapping("/{id}/download")
-    public ResponseEntity<?> downloadDocument(@PathVariable String id, @RequestParam("dmsRole") String role, @RequestParam("userId") String userId) {
+    public ResponseEntity<?> downloadDocument(
+            @PathVariable String id,
+            @RequestParam("dmsRole") String role,
+            @RequestParam("userId") String userId) {
         try {
             BaseResource documentDTO = documentService.getDocumentById(id);
             Document doc = (Document) documentDTO;
+
             byte[] fileData = documentService.downloadDocument(id, userId, role);
             ByteArrayResource resource = new ByteArrayResource(fileData);
+
+            String filename = doc.getName();
+            if (!filename.contains(".")) {
+                filename += ".bin"; // fallback if no extension
+            }
+
+            String contentType = doc.getContentType();
+            if (contentType == null || contentType.isBlank()) {
+                contentType = "application/octet-stream"; // fallback
+            }
+
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"" + doc.getName() + "\"")
-                    .contentType(MediaType.parseMediaType(doc.getContentType()))
-                    .contentLength(fileData.length) // Use actual size, not database size
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .contentLength(fileData.length)
                     .body(resource);
 
         } catch (Exception e) {
@@ -137,6 +151,7 @@ public class DocumentController  {
                     .body("Error downloading document: " + e.getMessage());
         }
     }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateDocument(
             @PathVariable String id,

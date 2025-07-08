@@ -1,18 +1,13 @@
 package com.rasp.dms.controller;
 
-
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.annotation.Value;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.springframework.web.bind.annotation.*;
-import platform.db.Expression;
-import platform.db.REL_OP;
-import platform.defined.account.helper.RoleResourceHelper;
-import platform.defined.account.resource.RoleResource;
+import org.springframework.web.multipart.MultipartFile;
 import platform.defined.resource.AuditLog;
-import platform.defined.resource.User;
 import platform.defined.service.AuditLogService;
 import platform.helper.SessionHelper;
-import platform.helper.UserHelper;
 import platform.resource.BaseResource;
 import platform.resource.login;
 import platform.resource.result;
@@ -22,57 +17,80 @@ import platform.util.security.SecurityUtil;
 import platform.webservice.BaseService;
 import platform.webservice.ServletContext;
 
-import java.net.URLDecoder;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.UnsupportedEncodingException;
+import java.util.*;
+
 public class BaseController {
+    private static final String[] HEADERS_TO_TRY = {"X-Forwarded-For", "Proxy-Client-IP", "WL-Proxy-Client-IP", "HTTP_X_FORWARDED_FOR", "HTTP_X_FORWARDED", "HTTP_X_CLUSTER_CLIENT_IP", "HTTP_CLIENT_IP", "HTTP_FORWARDED_FOR", "HTTP_FORWARDED", "HTTP_VIA", "REMOTE_ADDR"};
     BaseService service;
     BaseResource resource;
+//    @Value("${rbac.enabled}")
+//    private boolean rbac_enabled;
 
-    @Value("${rbac.enabled}")
-    private boolean rbac_enabled;
-
-    private static final String[] HEADERS_TO_TRY = {"X-Forwarded-For",
-            "Proxy-Client-IP", "WL-Proxy-Client-IP", "HTTP_X_FORWARDED_FOR",
-            "HTTP_X_FORWARDED", "HTTP_X_CLUSTER_CLIENT_IP", "HTTP_CLIENT_IP",
-            "HTTP_FORWARDED_FOR", "HTTP_FORWARDED", "HTTP_VIA", "REMOTE_ADDR"};
     public BaseController(BaseResource resource, BaseService service) {
         this.service = service;
         this.resource = resource;
     }
 
 
-
     protected boolean isLoginRequired() {
         return true;
     }
-    ServletContext validSession(String sessionId) throws ApplicationException {
-        if (!isLoginRequired()) {
-            return null;
-        }
-        session _session = (session) SessionHelper.getInstance().getById(sessionId);
-        if (_session == null) {
-            if (!isLoginRequired()) {
-                return null;
-            }
-            throw new ApplicationException(ExceptionSeverity.ERROR, "Invalid Session");
-        }
-        ServletContext ctx = new ServletContext(_session);
+
+    //    ServletContext validSession(String sessionId) throws ApplicationException {
+//        if (!isLoginRequired()) {
+//            return null;
+//        }
+//        session _session = (session) SessionHelper.getInstance().getById(sessionId);
+//        if (_session == null) {
+//            if (!isLoginRequired()) {
+//                return null;
+//            }
+//            throw new ApplicationException(ExceptionSeverity.ERROR, "Invalid Session");
+//        }
+//        ServletContext ctx = new ServletContext(_session);
+//        return ctx;
+//    }
+    ServletContext getCtx() throws ApplicationException {
+
+        ServletContext ctx = new ServletContext();
         return ctx;
     }
-    @CrossOrigin(origins = "*")
+
+    void validateRole(ServletContext ctx, String action) throws ApplicationException {
+//        if (rbac_enabled) {//if rbac is enbabled in application.properties then go inside this if
+//            String userId = ctx.getUserId();//getting user id from ServletContext
+//            User user = (User) UserHelper.getInstance().getById(userId);//getting user by id
+//            if (user == null) {//throw exception if user is null
+//                throw new ApplicationException(ExceptionSeverity.ERROR, "Invalid Session ID");
+//            }
+//            if (user.getRole() == null) {//throw exception if role  is null in user
+//                throw new ApplicationException(ExceptionSeverity.ERROR, "Role id not found!!");
+//            }
+//            String resource = service.getResource().getMetaData().getName();//getting resource name
+//            RoleResource roleResource = (RoleResource) RoleResourceHelper.getInstance().getByExpressionFirstRecord(Expression.and(new Expression(RoleResource.FIELD_ROLE_ID, REL_OP.EQ, user.getRole()), new Expression(RoleResource.FIELD_ACTION, REL_OP.EQ, action), new Expression(RoleResource.FIELD_RESOURCE, REL_OP.EQ, resource)));//getting role resource based on role,resource and action
+//            if (roleResource == null) {
+//                throw new ApplicationException(ExceptionSeverity.ERROR, "Access denied!!!");//if role resource is null throw an exception
+//            }
+//        }
+    }
+
+    @CrossOrigin("*")
     @RequestMapping(method = RequestMethod.GET)
     public @ResponseBody
-    String Get(@CookieValue(value="session_id",required=false) String sessionId,
-               @RequestParam(value="queryId", required=true) String queryId,
-               @RequestParam(value="session_id", required=false) String session_id,
+    Object Get(@CookieValue(value = "session_id", required = false) String sessionId,
+               @RequestParam(value = "queryId", required = true) String queryId,
+               @RequestParam(value = "session_id", required = false) String session_id,
                @RequestParam(value = "page_no", required = false) String page_no,
                @RequestParam(value = "order_by", required = false) String order_by,
                @RequestParam(value = "page_size", required = false) String page_size,
                @RequestParam(value = "search_fields", required = false) String search_fields,
                @RequestParam(value = "filter", required = false) String filter,
                @RequestParam(value = "search", required = false) String search,
-               @RequestParam(value="args", required=false) String args) {
+               @RequestParam(value = "document_id", required = false) String document_id,
+               @RequestParam(value = "user_id", required = false) String user_id,
+               @RequestParam(value = "dmsRole", required = false) String dmsRole,
+               @RequestParam(value = "args", required = false) String args) {
         result result = new result();
         try {
             if (Util.isEmpty(sessionId)) {
@@ -81,8 +99,9 @@ public class BaseController {
             if ("undefined".equalsIgnoreCase(sessionId)) {
                 sessionId = null;
             }
-            ServletContext ctx = validSession(sessionId);
-            validateRole(ctx,queryId);//verify access
+            // ServletContext ctx = validSession(sessionId);
+            ServletContext ctx= getCtx();
+            validateRole(ctx, queryId);//calling validateRole method from here and passing ServletContext and queryId
             if (!Util.isEmpty(page_no)) {
                 ctx.addParam("page_no", page_no);
             }
@@ -101,30 +120,33 @@ public class BaseController {
             if (!Util.isEmpty(search_fields)) {
                 ctx.addParam("search_fields", search_fields);
             }
-            Map<String,Object> map = new HashMap();
+            if(queryId.equalsIgnoreCase("GET_DOCUMENT")){
+                if(document_id != null) {
+                    return service.DownloadDocument(document_id,dmsRole,user_id);
+                }
+            }
+            Map<String, Object> map = new HashMap();
             if (!Util.isEmpty(args)) {
                 String[] argvalues = args.split(",");
-                for(String values: argvalues) {
+                for (String values : argvalues) {
                     String[] valpair = values.split(":");
                     if (valpair.length != 2) {
                         throw new ApplicationException(ExceptionSeverity.ERROR, "args can  have only values of format name:value");
                     }
-                    if(valpair[1] != null && valpair[1].indexOf(";") != -1)
-                        map.put(valpair[0], valpair[1].split(";"));
-                    else
-                        map.put(valpair[0], valpair[1]);
+                    if (valpair[1] != null && valpair[1].indexOf(";") != -1) map.put(valpair[0], valpair[1].split(";"));
+                    else map.put(valpair[0], valpair[1]);
                 }
             }
-            BaseResource[] resources = service.getQuery(ctx,queryId,map);
-//            if (isLoginRequired()) {
-//                if (!Util.isEmpty(resources)) {
-//                    if (isFieldEncryptionRequired(resources[0])) {
-//                        for (BaseResource resource : resources) {
-//                            encrypt_resource_field(ctx, resource);
-//                        }
-//                    }
-//                }
-//            }
+            BaseResource[] resources = service.getQuery(ctx, queryId, map);
+            if (isLoginRequired()) {
+                if (!Util.isEmpty(resources)) {
+                    if (isFieldEncryptionRequired(resources[0])) {
+                        for (BaseResource resource : resources) {
+                            encrypt_resource_field(ctx, resource);
+                        }
+                    }
+                }
+            }
             result.setErrCode(0);
             result.setMessage("Success");
             result.setResource(resources);
@@ -139,33 +161,30 @@ public class BaseController {
     }
 
     public boolean isFieldEncryptionRequired(BaseResource resource) {
-        for(Field field : resource.getMetaData().getFieldsArray()) {
-            if (field.isApi_encrypt())
-                return true;
+        for (Field field : resource.getMetaData().getFieldsArray()) {
+            if (field.isApi_encrypt()) return true;
         }
         return false;
     }
 
     void encrypt_resource_field(ServletContext ctx, BaseResource resource) {
-        Map<String,Object> map = resource.convertResourceToMap();
-        for(Field field : resource.getMetaData().getFieldsArray()) {
+        Map<String, Object> map = resource.convertResourceToMap();
+        for (Field field : resource.getMetaData().getFieldsArray()) {
             if (field.isApi_encrypt()) {
                 String value = map.get(field.getName()).toString();
-                if (value == null)
-                    continue;
+                if (value == null) continue;
                 try {
                     value = SecurityUtil.aesEncrypt(value, ctx.getSession().getApi_encryption_key());
-                }catch (Exception e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
-                map.put(field.getName(),value);
+                map.put(field.getName(), value);
             }
         }
         resource.convertMapToResource(map);
     }
 
-    private AuditLog populateAuditLogCommonFields(String decodeString,
-                                                  BaseResource _resource, String action, String ipAddress) {
+    private AuditLog populateAuditLogCommonFields(String decodeString, BaseResource _resource, String action, String ipAddress) {
         AuditLog audit_log = new AuditLog();
         audit_log.setResource_action(action.toUpperCase());
         audit_log.setResource_data(decodeString);
@@ -176,14 +195,10 @@ public class BaseController {
         return audit_log;
     }
 
-    private String addToAuditLogs(ServletContext ctx, String decodeString,
-                                  BaseResource _resource, String action, String ipAddress)
-            throws Exception {
+    private String addToAuditLogs(ServletContext ctx, String decodeString, BaseResource _resource, String action, String ipAddress) throws Exception {
         AuditLogService auditLogService = new AuditLogService();
-        AuditLog audit_log = populateAuditLogCommonFields(decodeString,
-                _resource, action, ipAddress);
-        if (_resource instanceof login) {
-            login _login = (login) _resource;
+        AuditLog audit_log = populateAuditLogCommonFields(decodeString, _resource, action, ipAddress);
+        if (_resource instanceof login _login) {
             audit_log.setUser_id(_login.getEmail_id());
         }
         audit_log.setUser_id(ctx.getUserId());
@@ -198,10 +213,8 @@ public class BaseController {
     private String getClientIpAddress(HttpServletRequest request) {
         for (String header : HEADERS_TO_TRY) {
             String ipAddress = request.getHeader(header);
-            if (ipAddress != null && ipAddress.length() != 0
-                    && !"unknown".equalsIgnoreCase(ipAddress)) {
-                return ipAddress.contains(",") ? ipAddress.split(",")[0]
-                        : ipAddress;
+            if (ipAddress != null && ipAddress.length() != 0 && !"unknown".equalsIgnoreCase(ipAddress)) {
+                return ipAddress.contains(",") ? ipAddress.split(",")[0] : ipAddress;
             }
         }
         return request.getRemoteAddr();
@@ -212,81 +225,148 @@ public class BaseController {
         return Json.objecttoString(resource);
     }
 
-    protected void pre_process(ServletContext ctx,BaseResource resource) {
+    protected void pre_process(ServletContext ctx, BaseResource resource) {
         if (Util.isEmpty(resource.getName())) {
-            if (service.getHelper()  != null) {
+            if (service.getHelper() != null) {
                 BaseResource _resource = service.getHelper().getById(resource.getId());
-                if (_resource != null)
-                    resource.setName(_resource.getName());
+                if (_resource != null) resource.setName(_resource.getName());
             }
         }
     }
 
-    void validateRole(ServletContext ctx, String action) throws ApplicationException {
-        if (rbac_enabled) {
-            String userId = ctx.getUserId();//geting user id from ServletContext
-            User user = (User) UserHelper.getInstance().getById(userId);//getting user by id
-            if (user == null) {
-                throw new ApplicationException(ExceptionSeverity.ERROR, "Invalid Session ID");
-            }
-            if (user.getRole() == null) {
-                throw new ApplicationException(ExceptionSeverity.ERROR, "Role id not found!!");
-            }
-            String resource = service.getResource().getMetaData().getName();//getting resource name
-            RoleResource roleResource = (RoleResource) RoleResourceHelper.getInstance().getByExpressionFirstRecord(Expression.and
-                    (new Expression(RoleResource.FIELD_ROLE_ID, REL_OP.EQ, user.getRole()),
-                            new Expression(RoleResource.FIELD_ACTION, REL_OP.EQ, action), new Expression(RoleResource.FIELD_RESOURCE, REL_OP.EQ, resource)));//checking the access
-            if (roleResource == null) {
-                throw new ApplicationException(ExceptionSeverity.ERROR, "Access denied!!!");
-            }
-        }
+    private String unescapePOSTBody(String postBody) {
+        return postBody.replaceAll("%25", "%").replaceAll("%26", "&").replaceAll("%2B", "+");
     }
 
-    @CrossOrigin(origins = "*")
+
+
+
+    @CrossOrigin("*")
     @RequestMapping(method = RequestMethod.POST)
     public @ResponseBody
-    String post(@CookieValue(value="session_id",required=false) String sessionId,
-                @RequestParam(value="resource", required=true) String _resourceString,
-                @RequestParam(value="session_id", required=false) String session_id,
-                @RequestParam(value="action", required=false) String action,
-                @RequestParam(value="security_code", required=false) String security_code,
-                HttpServletRequest request) {
+    String post(
+            @CookieValue(value = "session_id", required = false) String sessionId,
+            @RequestParam(value = "resource", required = true) String _resourceString,
+            @RequestParam(value = "session_id", required = false) String session_id,
+            @RequestParam(value = "action", required = false) String action,
+            @RequestParam(value = "file",required = false) MultipartFile[] files,
+            @RequestParam(value = "appId",required = false) String appId,
+            @RequestParam(value = "user_id",required = false) String userId,
+            @RequestParam(value = "dmsRole",required = false) String dmsRole,
+            @RequestParam(value = "tags",required = false) String tags,
+            @RequestParam(value = "description",required = false) String description,
+            HttpServletRequest request) throws UnsupportedEncodingException {
+
         result result = new result();
         String audit_log_id = null;
         ServletContext ctx = null;
+        if (Util.isEmpty(action)) {
+
+            action = "add";
+        }
         try {
             if (Util.isEmpty(sessionId)) {
                 sessionId = session_id;
             }
-            ctx = validSession(sessionId);
-            validateRole(ctx,action);
-            String decodeString = SecurityUtil.decodeBase64(_resourceString);
-            System.out.println(decodeString);
-            BaseResource _resource = Json.stringToResource(URLDecoder.decode(decodeString),resource.getClass());
-            pre_process(ctx,_resource);
-            if (action == null) {
-                action = "add";
+            // ctx = validSession(sessionId);
+            ctx=getCtx();
+            if (ctx != null) {
+//                validateRole(ctx, action);
             }
-            if (ctx != null)
-                ctx.setSecurity_code(security_code);
-            String ipAddress = getClientIpAddress(request);
-            if ("add".equalsIgnoreCase(action)) {
-                service.add(ctx, _resource);
+            List<String> documentIds = new ArrayList<>();
+            if (action.equalsIgnoreCase("add") && files != null && files.length > 0) {
+                for (MultipartFile file : files) {
+                    String documentId = service.UploadFile(ctx, file, appId, userId, dmsRole, tags, description);
+                    documentIds.add(documentId);
+                }
+            }
+            String decodeString;
+            boolean multiple_resources = false;
+            if (_resourceString.startsWith("{")) {
+                decodeString = _resourceString;
             } else {
-                service.action(ctx,_resource,action);
+                decodeString = unescapePOSTBody(_resourceString);
+                decodeString = SecurityUtil.decodeBase64(decodeString);
             }
-            pre_process(ctx,_resource);
-            if (isLoginRequired()) {
-                audit_log_id = addToAuditLogs(ctx,
-                        getAuditLogString(_resource), _resource, action,
-                        ipAddress);
+            if (decodeString.startsWith("[")) {
+                multiple_resources = true;
             }
-            if (!Util.isEmpty(audit_log_id)) {
+            System.out.println(decodeString);
+
+            BaseResource[] resources = null;
+            BaseResource[] resourcesMutli;
+
+            if (multiple_resources) {
+                if ("addBulk".equalsIgnoreCase(action)) {
+                    ArrayList<BaseResource> resArray = new ArrayList<>();
+                    JSONArray jsonArray = new JSONArray(decodeString);
+                    for (int j = 0; j < jsonArray.length(); j++) {
+                        JSONObject explrObject = jsonArray.getJSONObject(j);
+                        BaseResource _resource = Json.stringToResource(explrObject.toString(), resource.getClass());
+                        resArray.add(_resource);
+                    }
+                    resourcesMutli = resArray.toArray(new BaseResource[resArray.size()]);
+                    service.addMultiResource(ctx, resourcesMutli);
+                    result.setErrCode(0);
+                    result.setMessage("Success");
+                    result.setResource(resources);
+                } else {
+                    service.action(ctx, decodeString, action);
+                    result.setErrCode(0);
+                    result.setMessage("Success");
+                }
+            } else {
+                BaseResource _resource = Json.stringToResource(decodeString, resource.getClass());
+                if (!documentIds.isEmpty()) {
+                    Map<String, Object> map = _resource.convertResourceToMap();
+                    int docIndex = 0;
+                    for (Field field : _resource.getMetaData().getFieldsArray()) {
+                        if (field.isFile() && docIndex < documentIds.size()) {
+                            map.put(field.getName(), documentIds.get(docIndex));
+                            docIndex++;
+                        }
+                    }
+                    _resource.convertMapToResource(map);
+                }
+                String ipAddress = getClientIpAddress(request);
+                if (isLoginRequired()) {
+                    audit_log_id = addToAuditLogs(ctx, getAuditLogString(_resource), _resource, action, ipAddress);
+                }
+                if ("add".equalsIgnoreCase(action)) {
+                    service.add(ctx, _resource);
+                } else {
+                    if(files != null && files.length > 0){
+                        service.action(ctx,_resource,action, Optional.of(files[0]),
+                                Optional.of(description),
+                                Optional.of(Collections.singleton(tags)),
+                                Optional.of(userId),
+                                Optional.of(dmsRole) );
+                    }
+                    else {
+                        service.action(
+                                ctx,
+                                _resource,
+                                action,
+                                files != null ? Optional.of(files[0]) : Optional.empty(),
+                                description != null ? Optional.of(description) : Optional.empty(),
+                                tags != null ? Optional.of(Collections.singleton(tags)) : Optional.empty(),
+                                userId != null ? Optional.of(userId) : Optional.empty(),
+                                dmsRole != null ? Optional.of(dmsRole) : Optional.empty()
+                        );
+
+
+                    }
+                }
+                if (ctx == null && _resource instanceof login login) {
+                    session _session = (session) SessionHelper.getInstance().getById(login.getSession_id());
+
+                    ctx = new ServletContext(_session);
+                }
                 updateAuditLogs(ctx, audit_log_id, "0", "Success");
+                result.setErrCode(0);
+                result.setMessage("Success");
+                result.setResource(_resource);
             }
-            result.setErrCode(0);
-            result.setMessage("Success");
-            result.setResource(_resource);
         } catch (Exception e) {
             if (!Util.isEmpty(audit_log_id)) {
                 updateAuditLogs(ctx, audit_log_id, "-1", e.getMessage());
@@ -299,8 +379,7 @@ public class BaseController {
         return responseStr;
     }
 
-    private void updateAuditLogs(ServletContext ctx, String id,
-                                 String errorCode, String errorMessage) {
+    private void updateAuditLogs(ServletContext ctx, String id, String errorCode, String errorMessage) {
         try {
             AuditLogService auditLogService = new AuditLogService();
             AuditLog audit_log = (AuditLog) auditLogService.get(ctx, id);
@@ -334,6 +413,4 @@ public class BaseController {
             excep.printStackTrace();
         }
     }
-
 }
-

@@ -41,6 +41,7 @@ keycloak:
 # File Storage Configuration
 file:
   upload-dir: C:/dms/uploads/
+  max: 1
 
 # Encryption Configuration
 encryption:

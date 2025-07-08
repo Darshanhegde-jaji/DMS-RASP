@@ -62,7 +62,7 @@ public class DocumentService {
         if (request.getTags() == null || request.getTags().isEmpty()) {
             document.setTags(List.of()); // Assuming Document.setTags() accepts List<String>
         } else {
-            document.setTags(new ArrayList<>(Integer.parseInt(String.valueOf(request.getTags())))); // Convert Set to List if needed
+           document.setTags(request.getTags()); // Convert Set to List if needed
         }
 
         if(document != null) {

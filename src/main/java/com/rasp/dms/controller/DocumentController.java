@@ -51,7 +51,10 @@ public class DocumentController  {
 
             // Parse tags if provided
             if (tags != null && !tags.isEmpty()) {
-                request.setTags((List<String>) Set.of(tags.split(",")));
+//                request.setTags((List<String>) Set.of(tags.split(",")));
+                request.setTags(List.of(tags.split(",")));
+            }else {
+                request.setTags(List.of());
             }
 
             DocumentDTO document = documentService.uploadDocument(file, request, userId,dmsRole);
@@ -138,14 +141,23 @@ public class DocumentController  {
     public ResponseEntity<?> updateDocument(
             @PathVariable String id,
             @RequestParam("file") MultipartFile file,
-            @RequestParam("description") String description,
-            @RequestParam("tags") Set<String> tags,
+            @RequestParam(value="description" ,required = false) String description,
+            @RequestParam(value = "tags",required = false) Set<String> tags,
             @RequestParam("userId") String userId,
             @RequestParam("dmsrole") String role) throws Exception {
 
         DocumentUploadRequest request = new DocumentUploadRequest();
-        request.setDescription(description);
-        request.setTags((List<String>) tags);
+        if(description != null && !description.isEmpty()){
+            request.setDescription(description);
+        }else {
+            request.setDescription("");
+        }
+        if(tags == null || tags.isEmpty()){
+            request.setTags((List<String>) tags);
+        }
+        else {
+            request.setTags(List.of());
+        }
 
         return documentService.updateDocument(id, file, request, userId,role);
     }

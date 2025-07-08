@@ -22,14 +22,13 @@ public class FileStorageService {
     @Value("${file.upload-dir}")
     private String uploadDir;
 
+    @Value("${file.max-files-per-folder:100}")
+    private int maxFilesPerFolder;
+
     public Map<String, String> storeFile(MultipartFile file, String appId, String userId) throws IOException {
 
-        String directoryPath = uploadDir + "/" + appId + "/"  + "/" + userId + "/";
-        Path directory = Paths.get(directoryPath);
-
-        if (!Files.exists(directory)) {
-            Files.createDirectories(directory);
-        }
+        // Find the appropriate folder or create a new one
+        String folderPath = findOrCreateFolder();
 
         // Generate unique names
         String originalFilename = file.getOriginalFilename();
@@ -39,7 +38,7 @@ public class FileStorageService {
         }
         String baseName = UUID.randomUUID().toString();
         String compressedFilename = baseName + ".zip";
-        String zipFilePath = directoryPath + compressedFilename;
+        String zipFilePath = folderPath + "/" + compressedFilename;
 
         // Compress file into a zip
         try (FileOutputStream fos = new FileOutputStream(zipFilePath);
@@ -55,13 +54,56 @@ public class FileStorageService {
         result.put("filePath", zipFilePath);
         result.put("originalFilename", originalFilename);
         result.put("uniqueFilename", compressedFilename);
+        result.put("folderName", Paths.get(folderPath).getFileName().toString());
 
         return result;
+    }
+
+    private String findOrCreateFolder() throws IOException {
+        // Ensure base upload directory exists
+        Path baseDir = Paths.get(uploadDir);
+        if (!Files.exists(baseDir)) {
+            Files.createDirectories(baseDir);
+        }
+
+        // Find the highest numbered folder
+        int currentFolderNumber = 1;
+        String currentFolderName = String.format("%03d", currentFolderNumber);
+        Path currentFolderPath = baseDir.resolve(currentFolderName);
+
+        // Look for existing folders and find the highest number
+        while (Files.exists(currentFolderPath)) {
+            // Check if current folder has space for more files
+            if (countFilesInFolder(currentFolderPath.toString()) < maxFilesPerFolder) {
+                return currentFolderPath.toString();
+            }
+
+            // Move to next folder
+            currentFolderNumber++;
+            currentFolderName = String.format("%03d", currentFolderNumber);
+            currentFolderPath = baseDir.resolve(currentFolderName);
+        }
+
+        // Create new folder if no existing folder has space
+        Files.createDirectories(currentFolderPath);
+        return currentFolderPath.toString();
+    }
+
+    private int countFilesInFolder(String folderPath) throws IOException {
+        Path folder = Paths.get(folderPath);
+        if (!Files.exists(folder)) {
+            return 0;
+        }
+
+        return (int) Files.list(folder)
+                .filter(Files::isRegularFile)
+                .count();
     }
 
     public byte[] loadFile(String filePath) throws IOException {
         return Files.readAllBytes(Paths.get(filePath));
     }
+
     public byte[] loadFileUnzipped(String filePath) throws Exception {
         // Load the zipped file
         byte[] zippedData = loadFile(filePath);
@@ -107,6 +149,7 @@ public class FileStorageService {
     public String getFileName(String filePath) {
         return Paths.get(filePath).getFileName().toString();
     }
+
     public String moveFile(String currentPath, String newPath) throws Exception {
         try {
             // Validate paths
@@ -159,5 +202,32 @@ public class FileStorageService {
         } catch (Exception e) {
             throw new Exception("Error moving file: " + e.getMessage(), e);
         }
+    }
+
+    // Additional utility methods for folder management
+    public String getCurrentFolderInfo() throws IOException {
+        Path baseDir = Paths.get(uploadDir);
+        if (!Files.exists(baseDir)) {
+            return "No folders created yet";
+        }
+
+        StringBuilder info = new StringBuilder();
+        info.append("Folder Status:\n");
+
+        int folderNumber = 1;
+        String folderName = String.format("%03d", folderNumber);
+        Path folderPath = baseDir.resolve(folderName);
+
+        while (Files.exists(folderPath)) {
+            int fileCount = countFilesInFolder(folderPath.toString());
+            info.append(String.format("Folder %s: %d/%d files\n",
+                    folderName, fileCount, maxFilesPerFolder));
+
+            folderNumber++;
+            folderName = String.format("%03d", folderNumber);
+            folderPath = baseDir.resolve(folderName);
+        }
+
+        return info.toString();
     }
 }

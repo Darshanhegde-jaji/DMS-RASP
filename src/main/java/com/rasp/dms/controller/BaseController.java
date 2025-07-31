@@ -24,6 +24,7 @@ public class BaseController {
     private static final String[] HEADERS_TO_TRY = {"X-Forwarded-For", "Proxy-Client-IP", "WL-Proxy-Client-IP", "HTTP_X_FORWARDED_FOR", "HTTP_X_FORWARDED", "HTTP_X_CLUSTER_CLIENT_IP", "HTTP_CLIENT_IP", "HTTP_FORWARDED_FOR", "HTTP_FORWARDED", "HTTP_VIA", "REMOTE_ADDR"};
     BaseService service;
     BaseResource resource;
+    private  String baseUrl = "http://localhost:8080/api/documents";
 //    @Value("${rbac.enabled}")
 //    private boolean rbac_enabled;
 
@@ -122,7 +123,7 @@ public class BaseController {
             }
             if(queryId.equalsIgnoreCase("GET_DOCUMENT")){
                 if(document_id != null) {
-                    return service.DownloadDocument(document_id,dmsRole,user_id);
+                    return service.DownloadDocument(document_id,dmsRole,user_id,baseUrl);
                 }
             }
             Map<String, Object> map = new HashMap();
@@ -276,7 +277,7 @@ public class BaseController {
             List<String> documentIds = new ArrayList<>();
             if (action.equalsIgnoreCase("add") && files != null && files.length > 0) {
                 for (MultipartFile file : files) {
-                    String documentId = service.UploadFile(ctx, file, appId, userId, dmsRole, tags, description);
+                    String documentId = service.UploadFile(ctx, file, appId, userId, dmsRole, tags, description,baseUrl);
                     documentIds.add(documentId);
                 }
             }
@@ -340,7 +341,7 @@ public class BaseController {
                                 Optional.of(description),
                                 Optional.of(Collections.singleton(tags)),
                                 Optional.of(userId),
-                                Optional.of(dmsRole) );
+                                Optional.of(dmsRole),baseUrl );
                     }
                     else {
                         service.action(
@@ -351,7 +352,7 @@ public class BaseController {
                                 description != null ? Optional.of(description) : Optional.empty(),
                                 tags != null ? Optional.of(Collections.singleton(tags)) : Optional.empty(),
                                 userId != null ? Optional.of(userId) : Optional.empty(),
-                                dmsRole != null ? Optional.of(dmsRole) : Optional.empty()
+                                dmsRole != null ? Optional.of(dmsRole) : Optional.empty(),baseUrl
                         );
 
 
